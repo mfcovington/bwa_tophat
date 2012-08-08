@@ -77,6 +77,14 @@ print `date`;
 print "CMD: bwa samse -n $samse_n $bwa_db $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sai $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/$fq_id-$ref_id.bwa.samse.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.log\n\n";
 `bwa samse -n $samse_n $bwa_db $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sai $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/$fq_id-$ref_id.bwa.samse.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.log`;
 
+
+# filter sam for -q30 and XT:A:U
+
+
+# how to keep track of reads that get filtered out so they can be sent to tophat??
+
+# grep -ve "XT:A:U"
+
 #convert sam to bam
 print `date`;
 print "CMD: samtools view -Shb -o $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/bwa_sam2bam.log\n\n";
@@ -101,6 +109,10 @@ print "CMD: samtools view -hb -F 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i
 print `date`;
 print "CMD: samtools view -hb -f 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam 2> $log_dir/$fq_id-$ref_id.extract_bwa_unmapped.log\n\n";
 `samtools view -hb -f 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam 2> $log_dir/$fq_id-$ref_id.extract_bwa_unmapped.log`;
+
+
+# merge unmapped bam with filtered bam
+
 
 #convert unmapped.bam to unmapped.fq
 print `date`;
