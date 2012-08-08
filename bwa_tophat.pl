@@ -5,10 +5,13 @@
 #
 # Description: 
 #
-use strict; use warnings;
+use strict;
+use warnings;
+use feature 'say';
 use Getopt::Long;
+use File::Path 'make_path';
 
-my ($fq_id, @fq_in, $fq_cat, $multi_fq, $out_dir);
+my ($fq_id, @fq_in, $fq_cat, $multi_fq, $out_dir, $verbose);
 
 ### GETOPT DEFAULTS
 my $threads = 1;
@@ -39,21 +42,15 @@ my $options = GetOptions (
 	"ref_id=s"	=>	\$ref_id,
 	"samse_n=i"	=>	\$samse_n,
 	"bowtie_db=s"	=>	\$bowtie_db,
-	"ref_fa=s"	=>	\$ref_fa
+	"ref_fa=s"	=>	\$ref_fa,
+    "verbose" => \$verbose,
 );
-
 
 my $log_dir = "$out_dir/logs/";
 my $bwa_dir = "$out_dir/bwa/";
 my $tophat_dir = "$out_dir/tophat/";
 my $merged_dir = "$out_dir/merged/";
-
-`mkdir -p $out_dir` unless -e $out_dir;
-`mkdir $log_dir` unless -e $log_dir;
-`mkdir $bwa_dir` unless -e $bwa_dir;
-`mkdir $tophat_dir` unless -e $tophat_dir;
-`mkdir $merged_dir` unless -e $merged_dir;
-
+make_path( $out_dir, $log_dir, $bwa_dir, $tophat_dir, $merged_dir );
 
 print "BEGIN!\n\n";
 
