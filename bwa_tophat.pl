@@ -10,8 +10,13 @@ use warnings;
 use feature 'say';
 use Getopt::Long;
 use File::Path 'make_path';
+use File::Copy 'cp';
+use IPC::Cmd qw[can_run run run_forked];
+use DateTime;
 
-my ($fq_id, @fq_in, $fq_cat, $multi_fq, $out_dir, $verbose);
+#TODO: get rid of concatenating fq files!
+
+my ($fq_id, @fq_in, $multi_fq, $out_dir, $verbose);
 
 ### GETOPT DEFAULTS
 my $threads = 1;
@@ -19,7 +24,7 @@ my $bwa_e = 15;
 my $bwa_i = 10;
 my $bwa_k = 1;
 my $bwa_l = 25;
-my $bwa_n = 0.02;
+my $bwa_n = 0.05;
 my $bwa_db = "/Volumes/SolexaRAID/Solexa_runs_Data/00.Downloaded_references_and_others/BWA_S_lycopersicum_chromosomes.2.40";
 my $ref_id = "Slyc";
 my $samse_n = 1;
@@ -28,52 +33,73 @@ my $ref_fa = "/Volumes/SolexaRAID/Solexa_runs_Data/00.Downloaded_references_and_
 
 
 
-my $options = GetOptions (
-	"out=s"		=>	\$out_dir,
-	"threads=i"	=>	\$threads,
-	"bwa_e=i"	=>	\$bwa_e,
-	"bwa_i=i"	=>	\$bwa_i,
-	"bwa_k=i"	=>	\$bwa_k,
-	"bwa_l=i"	=>	\$bwa_l,
-	"bwa_n=f"	=>	\$bwa_n,
-	"bwa_db=s"	=>	\$bwa_db,
-	"fq=s{1,}"	=>	\@fq_in,
-	"fq_id=s"	=>	\$fq_id,
-	"ref_id=s"	=>	\$ref_id,
-	"samse_n=i"	=>	\$samse_n,
-	"bowtie_db=s"	=>	\$bowtie_db,
-	"ref_fa=s"	=>	\$ref_fa,
-    "verbose" => \$verbose,
+my $options = GetOptions(
+    "out=s"       => \$out_dir,
+    "threads=i"   => \$threads,
+    "bwa_e=i"     => \$bwa_e,
+    "bwa_i=i"     => \$bwa_i,
+    "bwa_k=i"     => \$bwa_k,
+    "bwa_l=i"     => \$bwa_l,
+    "bwa_n=f"     => \$bwa_n,
+    "bwa_db=s"    => \$bwa_db,
+    "fq=s{1,}"    => \@fq_in,
+    "fq_id=s"     => \$fq_id,
+    "ref_id=s"    => \$ref_id,
+    "samse_n=i"   => \$samse_n,
+    "bowtie_db=s" => \$bowtie_db,
+    "ref_fa=s"    => \$ref_fa,
+    "verbose"     => \$verbose,
 );
 
+#check for dependencies
+my @bins = qw( bwa samtools tophat java );
+my @jars  = qw( /usr/local/bin/SortSam.jar /usr/local/bin/MarkDuplicates.jar /usr/local/bin/BuildBamIndex.jar );
+can_run($_) or die "$_ is not installed." for @bins;
+-e $_       or die "$_ is not installed." for @jars;
+my ( $cmd, $tool );
+
+#set parameters
+my $bwa_aln_param = "-t $threads -e $bwa_e -i $bwa_i -k $bwa_k -l $bwa_l -n $bwa_n $bwa_db $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.sai";
+my $bwa_samse_param = "-n $samse_n $bwa_db $bwa_dir/bwa.$fq_id-$ref_id.sai $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.sam";
+my $sam2bam_param_1 = "-Shb -o $bwa_dir/bwa.$fq_id-$ref_id.bam $bwa_dir/bwa.$fq_id-$ref_id.sam";
+my $sortsam_param_1 = "INPUT=$bwa_dir/bwa.$fq_id-$ref_id.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT";
+my $markdups_param_1 = "INPUT=$bwa_dir/bwa.$fq_id-$ref_id.sorted.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.sorted.dupl_rm.bam METRICS_FILE=$bwa_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true";
+my $extract_mapped_param = "-hb -F 4 $bwa_dir/bwa.$fq_id-$ref_id.sorted.dupl_rm.bam > $bwa_dir/mapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.bam";
+my $extract_unmapped_param = "-hb -f 4 $bwa_dir/bwa.$fq_id-$ref_id.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.bam";
+my $bam2fq_param = "$bwa_dir/unmapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.fq";
+my $tophat_param = "--splice-mismatches 1 --max-multihits 1 --segment-length 22 --butterfly-search --max-intron-length 5000 --solexa1.3-quals --num-threads $threads --library-type fr-unstranded --output-dir $tophat_dir $bowtie_db $bwa_dir/unmapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.fq";
+
+my $sam2bam_param_2 = "-Shb $tophat_dir/accepted_hits_and_unmapped.sam > $tophat_dir/accepted_hits_and_unmapped.bam";
+
+
+my $merge_param = "$merged_dir/bwa_tophat_$fq_id-$ref_id.bam $bwa_dir/mapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.bam $tophat_dir/accepted_hits_and_unmapped.bam";
+my $sortsam_param_2 = "INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT";
+my $markdups_param_2 = "INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam METRICS_FILE=$merged_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true";
+my $bam_index_param = "INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam.bai";
+
+
+#make output directories
 my $log_dir = "$out_dir/logs/";
 my $bwa_dir = "$out_dir/bwa/";
 my $tophat_dir = "$out_dir/tophat/";
 my $merged_dir = "$out_dir/merged/";
 make_path( $out_dir, $log_dir, $bwa_dir, $tophat_dir, $merged_dir );
 
-print "BEGIN!\n\n";
+open my $stdout_log, ">", "$log_dir/out.log";
+open my $stderr_log, ">", "$log_dir/err.log";
+open my $cmd_log,    ">", "$log_dir/cmd.log";
 
+my $fq_cat;
 if (scalar @fq_in > 1) {
-	$multi_fq = 1;
-	print `date`;
-	print"CMD: cat @fq_in > $out_dir/temp.fq\n\n";
-	`cat @fq_in > $out_dir/temp.fq`;
-	$fq_cat = "$out_dir/temp.fq";
+    $multi_fq = 1;
+    $fq_cat = "$out_dir/temp.fq";
+    run_cmd( [ "cat", @fq_in, ">", $fq_cat ] );
 }else{
-	$fq_cat = $fq_in[0];
+    $fq_cat = $fq_in[0];
 }
 
-# align with bwa
-print `date`;
-print "CMD: bwa aln -t $threads -e $bwa_e -i $bwa_i -k $bwa_k -l $bwa_l -n $bwa_n $bwa_db $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sai 2> $log_dir/$fq_id-$ref_id.bwa.aln.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.log\n\n";
-`bwa aln -t $threads -e $bwa_e -i $bwa_i -k $bwa_k -l $bwa_l -n $bwa_n $bwa_db $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sai 2> $log_dir/$fq_id-$ref_id.bwa.aln.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.log`;
-
-#convert sai to sam
-print `date`;
-print "CMD: bwa samse -n $samse_n $bwa_db $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sai $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/$fq_id-$ref_id.bwa.samse.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.log\n\n";
-`bwa samse -n $samse_n $bwa_db $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sai $fq_cat > $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/$fq_id-$ref_id.bwa.samse.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.log`;
-
+run_cmd( [ "bwa aln", $bwa_aln_param ] );
+run_cmd( [ "bwa samse", $bwa_samse_param ] );
 
 # filter sam for -q30 and XT:A:U
 
@@ -82,92 +108,45 @@ print "CMD: bwa samse -n $samse_n $bwa_db $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i
 
 # grep -ve "XT:A:U"
 
-#convert sam to bam
-print `date`;
-print "CMD: samtools view -Shb -o $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/bwa_sam2bam.log\n\n";
-`samtools view -Shb -o $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sam 2> $log_dir/$fq_id-$ref_id.bwa_sam2bam.log`;
-
-####sort
-print `date`;
-print "CMD: java -jar /usr/local/bin/SortSam.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.1.log\n\n";
-`java -jar /usr/local/bin/SortSam.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.1.log`;
-
-####remove duplicates
-print `date`;
-print "CMD: java -jar /usr/local/bin/MarkDuplicates.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam METRICS_FILE=$bwa_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true 2> $log_dir/$fq_id-$ref_id.rm_dup.1.log\n\n";
-`java -jar /usr/local/bin/MarkDuplicates.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam METRICS_FILE=$bwa_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true 2> $log_dir/$fq_id-$ref_id.rm_dup.1.log`;
-
-####extract mapped reads to bam file
-print `date`;
-print "CMD: samtools view -hb -F 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/mapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam 2> $log_dir/$fq_id-$ref_id.extract_bwa_mapped.log\n\n";
-`samtools view -hb -F 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/mapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam 2> $log_dir/$fq_id-$ref_id.extract_bwa_mapped.log`;
-
-#extract unmapped reads to bam file
-print `date`;
-print "CMD: samtools view -hb -f 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam 2> $log_dir/$fq_id-$ref_id.extract_bwa_unmapped.log\n\n";
-`samtools view -hb -f 4 $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam 2> $log_dir/$fq_id-$ref_id.extract_bwa_unmapped.log`;
-
-
-# merge unmapped bam with filtered bam
-
-
-#convert unmapped.bam to unmapped.fq
-print `date`;
-print "CMD: samtools bam2fq $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.fq 2> $log_dir/$fq_id-$ref_id.bam2fq.log\n\n";
-`samtools bam2fq $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam > $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.fq 2> $log_dir/$fq_id-$ref_id.bam2fq.log`;
-
-#align unmapped with tophat
-print `date`;
-print "CMD: tophat --splice-mismatches 1 --max-multihits 1 --segment-length 22 --butterfly-search --max-intron-length 5000 --solexa1.3-quals --num-threads $threads --library-type fr-unstranded --output-dir $tophat_dir $bowtie_db $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.fq 2> $log_dir/tophat.$fq_id-$ref_id.tophat_unmapped.sm_1.mm_1.sl_22.mil_5000.lt_fu.bs.s13q.log\n\n";
-`tophat --splice-mismatches 1 --max-multihits 1 --segment-length 22 --butterfly-search --max-intron-length 5000 --solexa1.3-quals --num-threads $threads --library-type fr-unstranded --output-dir $tophat_dir $bowtie_db $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.fq 2> $log_dir/$fq_id-$ref_id.tophat_unmapped.sm_1.mm_1.sl_22.mil_5000.lt_fu.bs.s13q.log`;
+run_cmd( [ "samtools view",                               $sam2bam_param_1          ] );
+run_cmd( [ "java -jar /usr/local/bin/SortSam.jar",        $sortsam_param_1        ] );
+run_cmd( [ "java -jar /usr/local/bin/MarkDuplicates.jar", $markdups_param_1       ] );
+run_cmd( [ "samtools view",                               $extract_mapped_param   ] );
+run_cmd( [ "samtools view",                               $extract_unmapped_param ] );
+run_cmd( [ "samtools bam2fq",                             $bam2fq_param           ] );
+run_cmd( [ "tophat",                                      $tophat_param           ] );
 
 #extract reads still unmapped after tophat
 #convert to sam
 print `date`;
 print "CMD: Extracting unmapped tophat reads, etc.\n\n";
-`samtools view -h $tophat_dir/accepted_hits.bam > $tophat_dir/accepted_hits.sam;   cp -p $tophat_dir/accepted_hits.sam $tophat_dir/accepted_hits_and_unmapped.sam;   /Volumes/OuterColomaData/Mike/extract_unmapped_tophat_to_sam.pl --fq $bwa_dir/unmapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.fq --sam $tophat_dir/accepted_hits.sam --out ">$tophat_dir/accepted_hits_and_unmapped.sam";   samtools view -Shb $tophat_dir/accepted_hits_and_unmapped.sam > $tophat_dir/accepted_hits_and_unmapped.bam;   rm $tophat_dir/accepted_hits.sam $tophat_dir/accepted_hits_and_unmapped.sam`;
+`samtools view -h $tophat_dir/accepted_hits.bam > $tophat_dir/accepted_hits.sam`;
+
+cp "$tophat_dir/accepted_hits.sam", "$tophat_dir/accepted_hits_and_unmapped.sam" or die "Can't copy";
+`/Volumes/OuterColomaData/Mike/extract_unmapped_tophat_to_sam.pl --fq $bwa_dir/unmapped.bwa.$fq_id-$ref_id.sorted.dupl_rm.fq --sam $tophat_dir/accepted_hits.sam --out ">$tophat_dir/accepted_hits_and_unmapped.sam"`;
+run_cmd( [ "samtools view",                               $sam2bam_param_2          ] );
+unlink "$tophat_dir/accepted_hits.sam", "$tophat_dir/accepted_hits_and_unmapped.sam";
 
 #####changed this merge to merge bwa_mapped + tophat_mapped + tophat_unmapped
 #merge bwa and tophat bam files
-print `date`;
-print "CMD: samtools merge $merged_dir/bwa_tophat_$fq_id-$ref_id.bam $bwa_dir/mapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam $tophat_dir/accepted_hits_and_unmapped.bam > $log_dir/$fq_id-$ref_id.merge.log\n\n";
-`samtools merge $merged_dir/bwa_tophat_$fq_id-$ref_id.bam $bwa_dir/mapped.bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.dupl_rm.bam $tophat_dir/accepted_hits_and_unmapped.bam > $log_dir/$fq_id-$ref_id.merge.log`;
+run_cmd( [ "samtools merge",                               $merge_param ] );
+run_cmd( [ "java -jar /usr/local/bin/SortSam.jar",        $sortsam_param_2        ] );
+run_cmd( [ "java -jar /usr/local/bin/MarkDuplicates.jar", $markdups_param_2       ] );
+run_cmd( [ "java -jar /usr/local/bin/BuildBamIndex.jar", $bam_index_param       ] );
+unlink "rm $out_dir/temp.fq" if $multi_fq ==1;
 
-#sort
-print `date`;
-print "CMD: java -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log\n\n";
-`java -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log`;
-
-#remove duplicates  (can I remove this since I rm_dup'd earlier?)
-print `date`;
-print "CMD: java -jar /usr/local/bin/MarkDuplicates.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam METRICS_FILE=$merged_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true 2> $log_dir/$fq_id-$ref_id.rm_dup.2.log\n\n";
-`java -jar /usr/local/bin/MarkDuplicates.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam METRICS_FILE=$merged_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true 2> $log_dir/$fq_id-$ref_id.rm_dup.2.log`;
-
-#index
-print `date`;
-print "CMD: java -jar /usr/local/bin/BuildBamIndex.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam.bai 2> $log_dir/$fq_id-$ref_id.index.log\n\n";
-`java -jar /usr/local/bin/BuildBamIndex.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam.bai 2> $log_dir/$fq_id-$ref_id.index.log`;
-
-#index
-# print "\nCMD: java -jar /usr/local/bin/BuildBamIndex.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam.bai 2> $log_dir/$fq_id-$ref_id.index.2.log\n\n";
-# `java -jar /usr/local/bin/BuildBamIndex.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam.bai 2> $log_dir/$fq_id-$ref_id.index.2.log`;
-
-# print "\nCMD: java -jar /usr/local/bin/GenomeAnalysisTK.jar -T RealignerTargetCreator -R $ref_fa -o $merged_dir/$fq_id-$ref_id.target_positions.list -I $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam  > $log_dir/$fq_id-$ref_id.create_target.log\n\n";
-# `java -jar /usr/local/bin/GenomeAnalysisTK.jar -T RealignerTargetCreator -R $ref_fa -o $merged_dir/$fq_id-$ref_id.target_positions.list -I $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam  > $log_dir/$fq_id-$ref_id.create_target.log`;
-
-# print "\nCMD: java -Djava.io.tmpdir=$out_dir -jar /usr/local/bin/GenomeAnalysisTK.jar -I $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam -R $ref_fa -T IndelRealigner -targetIntervals $merged_dir/$fq_id-$ref_id.target_positions.list -o $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.bam > $log_dir/$fq_id-$ref_id.realign.log\n\n";
-# `java -Djava.io.tmpdir=$out_dir -jar /usr/local/bin/GenomeAnalysisTK.jar -I $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam -R $ref_fa -T IndelRealigner -targetIntervals $merged_dir/$fq_id-$ref_id.target_positions.list -o $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.bam > $log_dir/$fq_id-$ref_id.realign.log`;
-
-# print "\nCMD: java -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.bam OUTPUT= $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log\n\n";
-# `java -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.bam OUTPUT= $merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log`;
-
-# print "\nCMD: java -jar /usr/local/bin/BuildBamIndex.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.sorted.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.sorted.bam.bai 2> $log_dir/$fq_id-$ref_id.index.2.log\n\n";
-# `java -jar /usr/local/bin/BuildBamIndex.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.sorted.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.realigned.sorted.bam.bai 2> $log_dir/$fq_id-$ref_id.index.2.log`;
-
-`rm $out_dir/temp.fq` if $multi_fq ==1;
-
-print "END!\n";
-`date`;
+sub run_cmd {
+    my $cmd = shift;
+    my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
+    say $stdout_log $datestamp;
+    say $stderr_log $datestamp;
+    say $cmd_log $datestamp;
+    my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
+      run( command => $cmd, verbose => $verbose );
+    die $error_message unless $success;
+    print $stdout_log join "", @$stdout_buf;
+    print $stderr_log join "", @$stderr_buf;
+}
 
 exit;
 
