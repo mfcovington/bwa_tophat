@@ -10,8 +10,12 @@ use autodie;
 use feature 'say';
 with qw(MooseX::Clone);
 
+use Data::Printer;
+
 ###TODO: make auto-generate f from fq_in? (only if not specified?)
 ###TOTO: at some point make a check for required params: prefix and fq_in
+###TODO: prevent -0, -1, and -2 together?
+###TODO: specify out_dir
 
 # sub _run_cmd {
 #     my $cmd = shift;
@@ -29,9 +33,30 @@ with qw(MooseX::Clone);
 sub _bwa_aln_param {
     my $self = shift;
 
-    my %params;
-    $params{'n'} = $self->n   if $self->has_n;
-    $params{'o'} = $self->o   if $self->has_o;
+    my @args = ( 'n', 'o', 'e', 'i', 'd', 'l', 'k', 'm', 't', 'M', 'O', 'E', 'R', 'q', 'B', 'c', 'L', 'N', 'I', 'b' );
+    my @params;
+    for (@args) {
+        push @params, join " ", "-$_", $self->$_ if defined $self->$_;
+    }
+    push @params, "-0" if $self->se;
+    push @params, "-1" if $self->pe1;
+    push @params, "-2" if $self->pe2;
+    push @params, $self->_prefix;
+    push @params, $self->fq;
+    p @args;
+    p @params;
+
+    my $bwa_aln_param = join " ", @params;
+    return $bwa_aln_param;
+}
+
+
+# sub _bwa_aln_param {
+#     my $self = shift;
+
+#     my %params;
+#     $params{'n'} = $self->n   if $self->has_n;
+#     $params{'o'} = $self->o   if $self->has_o;
     # $params{'e'} = $self->e   if $self->has_e;
     # $params{'i'} = $self->i   if $self->has_i;
     # $params{'d'} = $self->d   if $self->has_d;
@@ -54,19 +79,19 @@ sub _bwa_aln_param {
     # $params{'1'} = $self->pe1 if $self->has_pe1;
     # $params{'2'} = $self->pe2 if $self->has_pe2;
 
-    my @param_array;
-    for (keys %params) {
-        push @param_array, join " ", "-$_", $params{$_};
-    }
-    push @param_array, "-0" if $self->has_se;
-    push @param_array, "-1" if $self->has_pe1;
-    push @param_array, "-2" if $self->has_pe2;
-    # push @param_array, $self->prefix;
-    push @param_array, $self->fq;
+#     my @param_array;
+#     for (keys %params) {
+#         push @param_array, join " ", "-$_", $params{$_};
+#     }
+#     push @param_array, "-0" if $self->has_se;
+#     push @param_array, "-1" if $self->has_pe1;
+#     push @param_array, "-2" if $self->has_pe2;
+#     push @param_array, $self->prefix;
+#     push @param_array, $self->fq;
 
-    my $bwa_aln_param = join " ", @param_array;
-    return $bwa_aln_param;
-}
+#     my $bwa_aln_param = join " ", @param_array;
+#     return $bwa_aln_param;
+# }
 
 # sub bwa_aln {
 #     my $self = shift;
@@ -110,6 +135,14 @@ sub samtools_cmd_gaps {
     return $samtools_cmd;
 }
 
+sub _prefix {
+    my $self = shift;
+
+    my ( $filename, $dir_name ) = fileparse( $self->fasta_ref, ".fa(sta)?" );
+    return $dir_name . $filename;
+}
+
+
 has 'fq' => (
     is    => 'rw',
     isa   => 'Str',
@@ -124,7 +157,6 @@ has 'f' => (
     isa     => 'Str',
     alias   => 'file_out',
     traits => [qw(NoClone)],
-    predicate => 'has_f',
     # -f FILE   file to write output to instead of stdout
 );
 
@@ -138,7 +170,6 @@ has 'n' => (
     is    => 'rw',
     isa   => 'Num',
     alias => [qw(max_diff missing_prob)],
-    predicate => 'has_n',
     # -n NUM    max #diff (int) or missing prob under 0.02 err rate (float) [0.04]
 );
 
@@ -146,7 +177,6 @@ has 'o' => (
     is      => 'rw',
     isa     => 'Int',
     alias   => 'gap_open',
-    predicate => 'has_o',
     # -o INT    maximum number or fraction of gap opens [1]
 );
 
@@ -281,7 +311,6 @@ has 'se' => (
     is      => 'rw',
     isa     => 'Bool',
     alias   => 'single',
-    predicate => 'has_se',
     # -0        use single-end reads only (effective with -b)
 );
 
@@ -289,7 +318,6 @@ has 'pe1' => (
     is      => 'rw',
     isa     => 'Bool',
     alias   => 'pair1',
-    predicate => 'has_pe1',
     # -1        use the 1st read in a pair (effective with -b)
 );
 
@@ -297,7 +325,6 @@ has 'pe2' => (
     is      => 'rw',
     isa     => 'Bool',
     alias   => 'pair2',
-    predicate => 'has_pe2',
     # -2        use the 2nd read in a pair (effective with -b)
 );
 

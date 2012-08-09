@@ -13,8 +13,12 @@ use bwa_aln_commander;
 
 my $bwa = bwa_aln_commander->new(
     fq_in => "sequences.fq",
+    fasta_ref => "/refs/reference.fasta",
     n => 0.04,
     o => 55,
+    se => 1,
+    pe2 => 1,
 );
 
 say $bwa->_bwa_aln_param;
+
