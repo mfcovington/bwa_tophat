@@ -14,7 +14,11 @@ use File::Copy 'cp';
 use IPC::Cmd qw[can_run run run_forked];
 use DateTime;
 
+use bwa_aln_commander
+
 #TODO: get rid of concatenating fq files!
+#TODO: give fa instead of prefix for bowtie/bwa index; check for existence of index files and create, if necessary
+#TODO: for bowtie (and others?) have an extra argument for parameters not supported by my module
 
 my ($fq_id, @fq_in, $multi_fq, $out_dir, $verbose);
 
@@ -76,6 +80,20 @@ my $merge_param = "$merged_dir/bwa_tophat_$fq_id-$ref_id.bam $bwa_dir/mapped.bwa
 my $sortsam_param_2 = "INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT";
 my $markdups_param_2 = "INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam METRICS_FILE=$merged_dir/$fq_id-$ref_id.picard.dupl_rm.metrics_file.txt VALIDATION_STRINGENCY=LENIENT REMOVE_DUPLICATES=true";
 my $bam_index_param = "INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.dupl_rm.bam.bai";
+
+
+my $bwa_aln = bwa_aln_commander->new(
+    in_fq     => $fq_cat,
+    ref_fasta => $ref_fasta,
+    threads   => $threads,
+    e         => $bwa_e,
+    i         => $bwa_i,
+    k         => $bwa_k,
+    l         => $bwa_l,
+    n         => $bwa_n,
+    file_out  => "$bwa_dir/bwa.$fq_id-$ref_id.sai",
+);
+
 
 
 #make output directories
