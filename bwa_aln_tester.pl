@@ -10,6 +10,7 @@ use warnings;
 use autodie;
 use feature 'say';
 use bwa_aln_commander;
+use Data::Printer;
 
 my $bwa = bwa_aln_commander->new(
     fq_in => "sequences.fq",
@@ -18,7 +19,12 @@ my $bwa = bwa_aln_commander->new(
     o => 55,
     se => 1,
     pe2 => 1,
+    verbose => 1,
 );
 
-say $bwa->_bwa_aln_param;
+say $bwa->_param;
+say $bwa->_tool;
+say $bwa->_cmd;
+p $bwa->_cmd;
 
+$bwa->_run_cmd;

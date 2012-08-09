@@ -6,6 +6,8 @@ use MooseX::UndefTolerant;
 use File::Basename;
 use File::Path 'make_path';
 use Parallel::ForkManager;
+use DateTime;
+use IPC::Cmd qw[can_run run run_forked];
 use autodie;
 use feature 'say';
 with qw(MooseX::Clone);
@@ -14,23 +16,39 @@ use Data::Printer;
 
 ###TODO: make auto-generate f from fq_in? (only if not specified?)
 ###TOTO: at some point make a check for required params: prefix and fq_in
-###TODO: prevent -0, -1, and -2 together?
+###TODO: prevent -0, -1, and -2 together? (AND make sure -b is used, too?)
 ###TODO: specify out_dir
+###TODO: validity tests can_run bwa, test version, test flag compatibilities (like -012b mentionsabove)
+###TODO: make sure using all modules loaded
 
-# sub _run_cmd {
-#     my $cmd = shift;
-#     my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
-#     say $stdout_log $datestamp;
-#     say $stderr_log $datestamp;
-#     say $cmd_log $datestamp;
-#     my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
-#       run( command => $cmd, verbose => $verbose );
-#     die $error_message unless $success;
-#     print $stdout_log join "", @$stdout_buf;
-#     print $stderr_log join "", @$stderr_buf;
-# }
+sub _run_cmd {
+    my $self = shift;
 
-sub _bwa_aln_param {
+    my $cmd = $self->_cmd;
+    my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
+    # say $stdout_log $datestamp;
+    # say $stderr_log $datestamp;
+    # say $cmd_log $datestamp;
+    my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
+      run( command => $cmd, verbose => $self->verbose );
+    die $error_message unless $success;
+    # print $stdout_log join "", @$stdout_buf;
+    # print $stderr_log join "", @$stderr_buf;
+}
+
+sub _cmd {
+    my $self = shift;
+
+    return [ $self->_tool, $self->_param ];
+}
+
+sub _tool {
+    my $self = shift;
+
+    return "bwa aln";
+}
+
+sub _param {
     my $self = shift;
 
     my @args = ( 'n', 'o', 'e', 'i', 'd', 'l', 'k', 'm', 't', 'M', 'O', 'E', 'R', 'q', 'B', 'c', 'L', 'N', 'I', 'b' );
@@ -43,97 +61,13 @@ sub _bwa_aln_param {
     push @params, "-2" if $self->pe2;
     push @params, $self->_prefix;
     push @params, $self->fq;
-    p @args;
-    p @params;
 
     my $bwa_aln_param = join " ", @params;
     return $bwa_aln_param;
 }
 
 
-# sub _bwa_aln_param {
-#     my $self = shift;
 
-#     my %params;
-#     $params{'n'} = $self->n   if $self->has_n;
-#     $params{'o'} = $self->o   if $self->has_o;
-    # $params{'e'} = $self->e   if $self->has_e;
-    # $params{'i'} = $self->i   if $self->has_i;
-    # $params{'d'} = $self->d   if $self->has_d;
-    # $params{'l'} = $self->l   if $self->has_l;
-    # $params{'k'} = $self->k   if $self->has_k;
-    # $params{'m'} = $self->m   if $self->has_m;
-    # $params{'t'} = $self->t   if $self->has_t;
-    # $params{'M'} = $self->M   if $self->has_M;
-    # $params{'O'} = $self->O   if $self->has_O;
-    # $params{'E'} = $self->E   if $self->has_E;
-    # $params{'R'} = $self->R   if $self->has_R;
-    # $params{'q'} = $self->q   if $self->has_q;
-    # $params{'B'} = $self->B   if $self->has_B;
-    # $params{'c'} = $self->c   if $self->has_c;
-    # $params{'L'} = $self->L   if $self->has_L;
-    # $params{'N'} = $self->N   if $self->has_N;
-    # $params{'I'} = $self->I   if $self->has_I;
-    # $params{'b'} = $self->b   if $self->has_b;
-    # $params{'0'} = $self->se  if $self->has_se;
-    # $params{'1'} = $self->pe1 if $self->has_pe1;
-    # $params{'2'} = $self->pe2 if $self->has_pe2;
-
-#     my @param_array;
-#     for (keys %params) {
-#         push @param_array, join " ", "-$_", $params{$_};
-#     }
-#     push @param_array, "-0" if $self->has_se;
-#     push @param_array, "-1" if $self->has_pe1;
-#     push @param_array, "-2" if $self->has_pe2;
-#     push @param_array, $self->prefix;
-#     push @param_array, $self->fq;
-
-#     my $bwa_aln_param = join " ", @param_array;
-#     return $bwa_aln_param;
-# }
-
-# sub bwa_aln {
-#     my $self = shift;
-
-#     _run_cmd( [ "bwa aln", $bwa_aln_param ] );
-
-#     my $bwa_aln_cmd = "bwa"
-# }
-
-
-
-#     extends 'Moose::Meta::Attribute';
-
-# sub dump {
-#     my $self = shift;
-
-    # iterate over all the attributes in $self
-    # my %attributes = %{ $self->meta->get_attribute_map };
-    # while (my ($name, $attribute) = each %attributes) {
-
-    #     # print the label if available
-    #     if ($attribute->isa('MyApp::Meta::Attribute::Labeled')
-    #         && $attribute->has_label) {
-    #             print $attribute->label;
-    #     }
-    #     # otherwise print the name
-    #     else {
-    #         print $name;
-    #     }
-
-    #     # print the attribute's value
-    #     my $reader = $attribute->get_read_method;
-    #     print ": " . $self->$reader . "\n";
-    # }
-# }
-
-sub samtools_cmd_gaps {
-    my $self = shift;
-
-    my $samtools_cmd = "samtools mpileup" . $self->_region . $self->bam . " | cut -f1-2,4 > " . $self->out_file . ".cov_gaps";
-    return $samtools_cmd;
-}
 
 sub _prefix {
     my $self = shift;
@@ -326,6 +260,11 @@ has 'pe2' => (
     isa     => 'Bool',
     alias   => 'pair2',
     # -2        use the 2nd read in a pair (effective with -b)
+);
+
+has 'verbose' => (
+    is      => 'rw',
+    isa     => 'Bool',
 );
 
 
