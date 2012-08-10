@@ -39,24 +39,6 @@ sub _param {
     return $param_string;
 }
 
-# sub _cmd {
-#     my $self = shift;
-
-#     return [ $self->_tool, $self->_param ];
-# }
-
-# sub _open_fhs {
-#     my $self = shift;
-
-#     make_path( $self->_log_dir );
-#     open my $stdout_fh, ">>", $self->_log_dir . $self->_stdout_log;
-#     open my $stderr_fh, ">>", $self->_log_dir . $self->_stderr_log;
-#     open my $cmd_fh,    ">>", $self->_log_dir . $self->_cmd_log;
-#     $self->_stdout_log_fh($stdout_fh);
-#     $self->_stderr_log_fh($stderr_fh);
-#     $self->_cmd_log_fh($cmd_fh);
-# }
-
 sub _prefix {
     my $self = shift;
 
@@ -93,25 +75,6 @@ has 'f' => (
     # -f FILE   file to write output to instead of stdout
 );
 
-# has 'out_dir' => (
-#     is => 'rw',
-#     isa => 'Str',
-#     traits => [qw(NoClone)],
-#     default => "./",
-# );
-
-# has '_log_dir' => (
-#     is      => 'rw',
-#     isa     => 'Str',
-#     traits  => [qw(NoClone)],
-#     lazy => 1,
-#     default => sub {
-#         my $self = shift;
-
-#         return $self->out_dir . "/logs/";
-#     },
-# );
-
 has '_bwa_dir' => (
     is      => 'rw',
     isa     => 'Str',
@@ -123,45 +86,6 @@ has '_bwa_dir' => (
         return $self->out_dir . "/bwa/";
     },
 );
-
-# has '_stdout_log' => (
-#     is => 'rw',
-#     isa => 'Str',
-#     traits => [qw(NoClone)],
-#     default => "/out.log",
-# );
-
-# has '_stderr_log' => (
-#     is => 'rw',
-#     isa => 'Str',
-#     traits => [qw(NoClone)],
-#     default => "/err.log",
-# );
-
-# has '_cmd_log' => (
-#     is => 'rw',
-#     isa => 'Str',
-#     traits => [qw(NoClone)],
-#     default => "/cmd.log",
-# );
-
-# has '_stdout_log_fh' => (
-#     is => 'rw',
-#     isa => 'FileHandle',
-#     traits => [qw(NoClone)],
-# );
-
-# has '_stderr_log_fh' => (
-#     is => 'rw',
-#     isa => 'FileHandle',
-#     traits => [qw(NoClone)],
-# );
-
-# has '_cmd_log_fh' => (
-#     is => 'rw',
-#     isa => 'FileHandle',
-#     traits => [qw(NoClone)],
-# );
 
 # OK to clone these attributes
 has '_tool' => (
@@ -342,11 +266,6 @@ has 'pe2' => (
     alias   => 'pair2',
     # -2        use the 2nd read in a pair (effective with -b)
 );
-
-# has 'verbose' => (
-#     is      => 'rw',
-#     isa     => 'Bool',
-# );
 
 no Moose;
 __PACKAGE__->meta->make_immutable;
