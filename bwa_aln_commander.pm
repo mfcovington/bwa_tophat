@@ -17,28 +17,14 @@ use Data::Printer;
 ###TODO: make auto-generate f from fq_in? (only if not specified?)
 ###TOTO: at some point make a check for required params: prefix and fq_in
 ###TODO: prevent -0, -1, and -2 together? (AND make sure -b is used, too?)
-###TODO: specify out_dir
 ###TODO: validity tests can_run bwa, test version, test flag compatibilities (like -012b mentionsabove)
-###TODO: make sure using all modules loaded
+###TODO: make sure actually using all modules loaded
 
 sub _tool {
     my $self = shift;
 
     return "bwa aln";
-}
-
-sub _open_fhs {
-    my $self = shift;
-
-    open my $fh, ">", $self->_stdout_log;
-    # p $self->_stdout_log_fh; 
-    # p $fh;
-    $self->_stdout_log_fh($fh);
-    # p $self->_stdout_log_fh; 
-    say {$self->_stdout_log_fh} "opening!";
-    # my $fh2 = $self->_stdout_log_fh;
-    # say $fh2 "hi!";
-
+    # return "echo";
 }
 
 sub _param {
@@ -69,18 +55,23 @@ sub _run_cmd {
     my $self = shift;
 
     $self->_open_fhs;
-    say {$self->_stdout_log_fh} "running!";
-    p $self->_stdout_log_fh;
+
+    # #for testing
+    # say {$self->_stdout_log_fh} "running out!";
+    # say {$self->_stderr_log_fh} "running err!";
+    # say {$self->_cmd_log_fh} "running cmd!";
+    # #for testing
+
     my $cmd = $self->_cmd;
     my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
-    # say $stdout_log $datestamp;
-    # say $stderr_log $datestamp;
-    # say $cmd_log $datestamp;
+    say {$self->_stdout_log_fh} $datestamp;
+    say {$self->_stderr_log_fh} $datestamp;
+    say {$self->_cmd_log_fh} $datestamp;
     my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
       run( command => $cmd, verbose => $self->verbose );
     die $error_message unless $success;
-    # print $stdout_log join "", @$stdout_buf;
-    # print $stderr_log join "", @$stderr_buf;
+    print {$self->_stdout_log_fh} join "", @$stdout_buf;
+    print {$self->_stderr_log_fh} join "", @$stderr_buf;
 }
 
 sub _prefix {
@@ -88,6 +79,18 @@ sub _prefix {
 
     my ( $filename, $dir_name ) = fileparse( $self->fasta_ref, ".fa(sta)?" );
     return $dir_name . $filename;
+}
+
+sub _open_fhs {
+    my $self = shift;
+
+    make_path( $self->_log_dir );
+    open my $stdout_fh, ">>", $self->_log_dir . $self->_stdout_log;
+    open my $stderr_fh, ">>", $self->_log_dir . $self->_stderr_log;
+    open my $cmd_fh,    ">>", $self->_log_dir . $self->_cmd_log;
+    $self->_stdout_log_fh($stdout_fh);
+    $self->_stderr_log_fh($stderr_fh);
+    $self->_cmd_log_fh($cmd_fh);
 }
 
 # Don't clone these attributes
@@ -108,12 +111,6 @@ has 'f' => (
     # -f FILE   file to write output to instead of stdout
 );
 
-has 'fasta_ref' => (
-    is    => 'rw',
-    isa   => 'Str',
-    alias   => 'ref_fasta',
-);
-
 has 'out_dir' => (
     is => 'rw',
     isa => 'Str',
@@ -121,10 +118,37 @@ has 'out_dir' => (
     default => "./",
 );
 
+has '_log_dir' => (
+    is      => 'rw',
+    isa     => 'Str',
+    traits  => [qw(NoClone)],
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+
+        return $self->out_dir . "/logs/";
+    },
+);
+
 has '_stdout_log' => (
     is => 'rw',
     isa => 'Str',
     traits => [qw(NoClone)],
+    default => "/out.log",
+);
+
+has '_stderr_log' => (
+    is => 'rw',
+    isa => 'Str',
+    traits => [qw(NoClone)],
+    default => "/err.log",
+);
+
+has '_cmd_log' => (
+    is => 'rw',
+    isa => 'Str',
+    traits => [qw(NoClone)],
+    default => "/cmd.log",
 );
 
 has '_stdout_log_fh' => (
@@ -133,21 +157,25 @@ has '_stdout_log_fh' => (
     traits => [qw(NoClone)],
 );
 
-has '_stderr_log' => (
+has '_stderr_log_fh' => (
     is => 'rw',
     isa => 'FileHandle',
     traits => [qw(NoClone)],
 );
 
-has '_cmd_log' => (
+has '_cmd_log_fh' => (
     is => 'rw',
     isa => 'FileHandle',
     traits => [qw(NoClone)],
 );
-
-
 
 # OK to clone these attributes
+has 'fasta_ref' => (
+    is    => 'rw',
+    isa   => 'Str',
+    alias   => 'ref_fasta',
+);
+
 has 'n' => (
     is    => 'rw',
     isa   => 'Num',

@@ -20,8 +20,9 @@ my $bwa = bwa_aln_commander->new(
     se => 1,
     pe2 => 1,
     verbose => 1,
-    out_dir => "~/sandbox",
-    _stdout_log => "test_stdout_log",
+    _log_dir => "kellogs2",
+    # out_dir => "",
+    # _stdout_log => "test_stdout_log",
 );
 
 say $bwa->_param;
@@ -30,7 +31,7 @@ say $bwa->_cmd;
 p $bwa->_cmd;
 
 $bwa->_run_cmd;
-say "hi";
+# say "hi";
 # $bwa->_open_fhs;
 # say $bwa->_cmd;
 
