@@ -21,31 +21,24 @@ use Data::Printer;
 ###TODO: validity tests can_run bwa, test version, test flag compatibilities (like -012b mentionsabove)
 ###TODO: make sure using all modules loaded
 
-sub _run_cmd {
-    my $self = shift;
-
-    my $cmd = $self->_cmd;
-    my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
-    # say $stdout_log $datestamp;
-    # say $stderr_log $datestamp;
-    # say $cmd_log $datestamp;
-    my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
-      run( command => $cmd, verbose => $self->verbose );
-    die $error_message unless $success;
-    # print $stdout_log join "", @$stdout_buf;
-    # print $stderr_log join "", @$stderr_buf;
-}
-
-sub _cmd {
-    my $self = shift;
-
-    return [ $self->_tool, $self->_param ];
-}
-
 sub _tool {
     my $self = shift;
 
     return "bwa aln";
+}
+
+sub _open_fhs {
+    my $self = shift;
+
+    open my $fh, ">", $self->_stdout_log;
+    # p $self->_stdout_log_fh; 
+    # p $fh;
+    $self->_stdout_log_fh($fh);
+    # p $self->_stdout_log_fh; 
+    say {$self->_stdout_log_fh} "opening!";
+    # my $fh2 = $self->_stdout_log_fh;
+    # say $fh2 "hi!";
+
 }
 
 sub _param {
@@ -66,8 +59,29 @@ sub _param {
     return $bwa_aln_param;
 }
 
+sub _cmd {
+    my $self = shift;
 
+    return [ $self->_tool, $self->_param ];
+}
 
+sub _run_cmd {
+    my $self = shift;
+
+    $self->_open_fhs;
+    say {$self->_stdout_log_fh} "running!";
+    p $self->_stdout_log_fh;
+    my $cmd = $self->_cmd;
+    my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
+    # say $stdout_log $datestamp;
+    # say $stderr_log $datestamp;
+    # say $cmd_log $datestamp;
+    my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
+      run( command => $cmd, verbose => $self->verbose );
+    die $error_message unless $success;
+    # print $stdout_log join "", @$stdout_buf;
+    # print $stderr_log join "", @$stderr_buf;
+}
 
 sub _prefix {
     my $self = shift;
@@ -76,7 +90,7 @@ sub _prefix {
     return $dir_name . $filename;
 }
 
-
+# Don't clone these attributes
 has 'fq' => (
     is    => 'rw',
     isa   => 'Str',
@@ -100,6 +114,40 @@ has 'fasta_ref' => (
     alias   => 'ref_fasta',
 );
 
+has 'out_dir' => (
+    is => 'rw',
+    isa => 'Str',
+    traits => [qw(NoClone)],
+    default => "./",
+);
+
+has '_stdout_log' => (
+    is => 'rw',
+    isa => 'Str',
+    traits => [qw(NoClone)],
+);
+
+has '_stdout_log_fh' => (
+    is => 'rw',
+    isa => 'FileHandle',
+    traits => [qw(NoClone)],
+);
+
+has '_stderr_log' => (
+    is => 'rw',
+    isa => 'FileHandle',
+    traits => [qw(NoClone)],
+);
+
+has '_cmd_log' => (
+    is => 'rw',
+    isa => 'FileHandle',
+    traits => [qw(NoClone)],
+);
+
+
+
+# OK to clone these attributes
 has 'n' => (
     is    => 'rw',
     isa   => 'Num',
@@ -267,8 +315,5 @@ has 'verbose' => (
     isa     => 'Bool',
 );
 
-
 no Moose;
-# __PACKAGE__->meta->make_immutable;
-__PACKAGE__->meta->make_immutable(inline_constructor => 0);
-
+__PACKAGE__->meta->make_immutable;
