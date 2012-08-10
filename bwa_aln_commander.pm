@@ -4,13 +4,14 @@ use MooseX::Aliases;
 use MooseX::Clone;
 use MooseX::UndefTolerant;
 use File::Basename;
-use File::Path 'make_path';
+# use File::Path 'make_path';
 use Parallel::ForkManager;
 use DateTime;
-use IPC::Cmd qw[can_run run run_forked];
+# use IPC::Cmd qw[can_run run run_forked];
 use autodie;
 use feature 'say';
 with qw(MooseX::Clone);
+extends 'commander';
 
 use Data::Printer;
 
@@ -38,52 +39,29 @@ sub _param {
     return $param_string;
 }
 
-sub _cmd {
-    my $self = shift;
+# sub _cmd {
+#     my $self = shift;
 
-    return [ $self->_tool, $self->_param ];
-}
+#     return [ $self->_tool, $self->_param ];
+# }
 
-sub _run_cmd {
-    my $self = shift;
+# sub _open_fhs {
+#     my $self = shift;
 
-    $self->_open_fhs;
-
-    # #for testing
-    # say {$self->_stdout_log_fh} "running out!";
-    # say {$self->_stderr_log_fh} "running err!";
-    # say {$self->_cmd_log_fh} "running cmd!";
-    # #for testing
-
-    my $cmd = $self->_cmd;
-    my $datestamp = DateTime->now( time_zone => 'local' ) . " ---- " . join " ", @$cmd;
-    say {$self->_stdout_log_fh} $datestamp;
-    say {$self->_stderr_log_fh} $datestamp;
-    say {$self->_cmd_log_fh} $datestamp;
-    my( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) =
-      run( command => $cmd, verbose => $self->verbose );
-    die $error_message unless $success;
-    print {$self->_stdout_log_fh} join "", @$stdout_buf;
-    print {$self->_stderr_log_fh} join "", @$stderr_buf;
-}
+#     make_path( $self->_log_dir );
+#     open my $stdout_fh, ">>", $self->_log_dir . $self->_stdout_log;
+#     open my $stderr_fh, ">>", $self->_log_dir . $self->_stderr_log;
+#     open my $cmd_fh,    ">>", $self->_log_dir . $self->_cmd_log;
+#     $self->_stdout_log_fh($stdout_fh);
+#     $self->_stderr_log_fh($stderr_fh);
+#     $self->_cmd_log_fh($cmd_fh);
+# }
 
 sub _prefix {
     my $self = shift;
 
     my ( $filename, $dir_name ) = fileparse( $self->fasta_ref, ".fa(sta)?" );
     return $dir_name . $filename;
-}
-
-sub _open_fhs {
-    my $self = shift;
-
-    make_path( $self->_log_dir );
-    open my $stdout_fh, ">>", $self->_log_dir . $self->_stdout_log;
-    open my $stderr_fh, ">>", $self->_log_dir . $self->_stderr_log;
-    open my $cmd_fh,    ">>", $self->_log_dir . $self->_cmd_log;
-    $self->_stdout_log_fh($stdout_fh);
-    $self->_stderr_log_fh($stderr_fh);
-    $self->_cmd_log_fh($cmd_fh);
 }
 
 # Don't clone these attributes
@@ -115,24 +93,24 @@ has 'f' => (
     # -f FILE   file to write output to instead of stdout
 );
 
-has 'out_dir' => (
-    is => 'rw',
-    isa => 'Str',
-    traits => [qw(NoClone)],
-    default => "./",
-);
+# has 'out_dir' => (
+#     is => 'rw',
+#     isa => 'Str',
+#     traits => [qw(NoClone)],
+#     default => "./",
+# );
 
-has '_log_dir' => (
-    is      => 'rw',
-    isa     => 'Str',
-    traits  => [qw(NoClone)],
-    lazy => 1,
-    default => sub {
-        my $self = shift;
+# has '_log_dir' => (
+#     is      => 'rw',
+#     isa     => 'Str',
+#     traits  => [qw(NoClone)],
+#     lazy => 1,
+#     default => sub {
+#         my $self = shift;
 
-        return $self->out_dir . "/logs/";
-    },
-);
+#         return $self->out_dir . "/logs/";
+#     },
+# );
 
 has '_bwa_dir' => (
     is      => 'rw',
@@ -146,44 +124,44 @@ has '_bwa_dir' => (
     },
 );
 
-has '_stdout_log' => (
-    is => 'rw',
-    isa => 'Str',
-    traits => [qw(NoClone)],
-    default => "/out.log",
-);
+# has '_stdout_log' => (
+#     is => 'rw',
+#     isa => 'Str',
+#     traits => [qw(NoClone)],
+#     default => "/out.log",
+# );
 
-has '_stderr_log' => (
-    is => 'rw',
-    isa => 'Str',
-    traits => [qw(NoClone)],
-    default => "/err.log",
-);
+# has '_stderr_log' => (
+#     is => 'rw',
+#     isa => 'Str',
+#     traits => [qw(NoClone)],
+#     default => "/err.log",
+# );
 
-has '_cmd_log' => (
-    is => 'rw',
-    isa => 'Str',
-    traits => [qw(NoClone)],
-    default => "/cmd.log",
-);
+# has '_cmd_log' => (
+#     is => 'rw',
+#     isa => 'Str',
+#     traits => [qw(NoClone)],
+#     default => "/cmd.log",
+# );
 
-has '_stdout_log_fh' => (
-    is => 'rw',
-    isa => 'FileHandle',
-    traits => [qw(NoClone)],
-);
+# has '_stdout_log_fh' => (
+#     is => 'rw',
+#     isa => 'FileHandle',
+#     traits => [qw(NoClone)],
+# );
 
-has '_stderr_log_fh' => (
-    is => 'rw',
-    isa => 'FileHandle',
-    traits => [qw(NoClone)],
-);
+# has '_stderr_log_fh' => (
+#     is => 'rw',
+#     isa => 'FileHandle',
+#     traits => [qw(NoClone)],
+# );
 
-has '_cmd_log_fh' => (
-    is => 'rw',
-    isa => 'FileHandle',
-    traits => [qw(NoClone)],
-);
+# has '_cmd_log_fh' => (
+#     is => 'rw',
+#     isa => 'FileHandle',
+#     traits => [qw(NoClone)],
+# );
 
 # OK to clone these attributes
 has '_tool' => (
@@ -365,10 +343,10 @@ has 'pe2' => (
     # -2        use the 2nd read in a pair (effective with -b)
 );
 
-has 'verbose' => (
-    is      => 'rw',
-    isa     => 'Bool',
-);
+# has 'verbose' => (
+#     is      => 'rw',
+#     isa     => 'Bool',
+# );
 
 no Moose;
 __PACKAGE__->meta->make_immutable;
