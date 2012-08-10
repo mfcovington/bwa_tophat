@@ -94,6 +94,18 @@ my $bwa_aln = bwa_aln_commander->new(
     file_out  => "$bwa_dir/bwa.$fq_id-$ref_id.sai",
 );
 
+my $bwa = bwa_aln_commander->new(
+    fq_in => "sequences.fq",
+    fasta_ref => "/refs/reference.fasta",
+    n => 0.04,
+    o => 55,
+    se => 1,
+    pe2 => 1,
+    verbose => 1,
+    # _log_dir => "kellogs2",
+    # out_dir => "",
+    # _stdout_log => "test_stdout_log",
+);
 
 
 #make output directories

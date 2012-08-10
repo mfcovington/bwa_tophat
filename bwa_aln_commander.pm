@@ -20,17 +20,10 @@ use Data::Printer;
 ###TODO: validity tests can_run bwa, test version, test flag compatibilities (like -012b mentionsabove)
 ###TODO: make sure actually using all modules loaded
 
-sub _tool {
-    my $self = shift;
-
-    return "bwa aln";
-    # return "echo";
-}
-
 sub _param {
     my $self = shift;
 
-    my @args = ( 'n', 'o', 'e', 'i', 'd', 'l', 'k', 'm', 't', 'M', 'O', 'E', 'R', 'q', 'B', 'c', 'L', 'N', 'I', 'b' );
+    my @args = ( 'n', 'o', 'e', 'i', 'd', 'l', 'k', 'm', 't', 'M', 'O', 'E', 'R', 'q', 'f', 'B', 'c', 'L', 'N', 'I', 'b' );
     my @params;
     for (@args) {
         push @params, join " ", "-$_", $self->$_ if defined $self->$_;
@@ -41,8 +34,8 @@ sub _param {
     push @params, $self->_prefix;
     push @params, $self->fq;
 
-    my $bwa_aln_param = join " ", @params;
-    return $bwa_aln_param;
+    my $param_string = join " ", @params;
+    return $param_string;
 }
 
 sub _cmd {
@@ -63,7 +56,7 @@ sub _run_cmd {
     # #for testing
 
     my $cmd = $self->_cmd;
-    my $datestamp = DateTime->now . " ---- " . join " ", @$cmd;
+    my $datestamp = DateTime->now( time_zone => 'local' ) . " ---- " . join " ", @$cmd;
     say {$self->_stdout_log_fh} $datestamp;
     say {$self->_stderr_log_fh} $datestamp;
     say {$self->_cmd_log_fh} $datestamp;
@@ -94,11 +87,16 @@ sub _open_fhs {
 }
 
 # Don't clone these attributes
+has 'fq_id' => (
+    is    => 'rw',
+    isa   => 'Str',
+    traits => [qw(NoClone)],
+);
+
 has 'fq' => (
     is    => 'rw',
     isa   => 'Str',
-    alias => [qw(fastq fq)],
-    alias   => [qw(fq_in in_fq)],
+    alias   => [qw(fq_in in_fq fastq)],
     traits => [qw(NoClone)],
     predicate => 'has_fq',
 );
@@ -108,6 +106,12 @@ has 'f' => (
     isa     => 'Str',
     alias   => 'file_out',
     traits => [qw(NoClone)],
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+
+        return $self->_bwa_dir . join ".", "bwa", $self->fq_id, $self->ref_id, "sai"
+    },
     # -f FILE   file to write output to instead of stdout
 );
 
@@ -127,6 +131,18 @@ has '_log_dir' => (
         my $self = shift;
 
         return $self->out_dir . "/logs/";
+    },
+);
+
+has '_bwa_dir' => (
+    is      => 'rw',
+    isa     => 'Str',
+    traits  => [qw(NoClone)],
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+
+        return $self->out_dir . "/bwa/";
     },
 );
 
@@ -170,10 +186,21 @@ has '_cmd_log_fh' => (
 );
 
 # OK to clone these attributes
+has '_tool' => (
+    is    => 'ro',
+    isa   => 'Str',
+    default => 'bwa aln',
+);
+
 has 'fasta_ref' => (
     is    => 'rw',
     isa   => 'Str',
     alias   => 'ref_fasta',
+);
+
+has 'ref_id' => (
+    is    => 'rw',
+    isa   => 'Str',
 );
 
 has 'n' => (
