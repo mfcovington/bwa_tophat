@@ -107,6 +107,15 @@ my $bwa = bwa_aln_commander->new(
     # _stdout_log => "test_stdout_log",
 );
 
+my $bwa = bwa_sam_commander->new(
+    fq_in => xxx,
+    sai_in => $bwa_aln->file_out,
+    fasta_ref => "/refs/reference.fasta",
+    n => xxx,
+    f => xxx,
+    r => xxx,
+    verbose => 1,
+);
 
 #make output directories
 my $log_dir = "$out_dir/logs/";
