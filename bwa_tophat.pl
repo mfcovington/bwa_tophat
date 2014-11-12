@@ -92,7 +92,7 @@ print "CMD: samtools view -Shb -o $bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.
 
 ####sort
 print `date`;
-print "CMD: java -jar /usr/local/bin/SortSam.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.1.log\n\n";
+print "CMD: java -Djava.io.tmpdir=$out_dir -jar /usr/local/bin/SortSam.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.1.log\n\n";
 `java -jar /usr/local/bin/SortSam.jar INPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.bam OUTPUT=$bwa_dir/bwa.$fq_id-$ref_id.e_$bwa_e.i_$bwa_i.k_$bwa_k.l_$bwa_l.n_$bwa_n.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.1.log`;
 
 ####remove duplicates
@@ -138,7 +138,7 @@ print "CMD: samtools merge $merged_dir/bwa_tophat_$fq_id-$ref_id.bam $bwa_dir/ma
 
 #sort
 print `date`;
-print "CMD: java -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log\n\n";
+print "CMD: java -Djava.io.tmpdir=$out_dir -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log\n\n";
 `java -jar /usr/local/bin/SortSam.jar INPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.bam OUTPUT=$merged_dir/bwa_tophat_$fq_id-$ref_id.sorted.bam SORT_ORDER=coordinate VALIDATION_STRINGENCY=LENIENT 2> $log_dir/$fq_id-$ref_id.sort.2.log`;
 
 #remove duplicates  (can I remove this since I rm_dup'd earlier?)
